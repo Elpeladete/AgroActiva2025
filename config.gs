@@ -3,7 +3,7 @@
 // Configuración general
 const CONFIG = {
   // URLs
-  CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0BHePqF9yfxyNW9uG70JxvbKqRT7qt9uQ9g9Szqq1HukUiAW4141qp1EXzp2IgL8Z1jVVZZDSxuHP/pub?gid=1689140406&single=true&output=csv",
+  CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpl2Xw0_2YoA5CtVENqljNrdOREAClvkAXXON8sNytqzq0f_GPN7xx2lBfTm0sMQsSk0hya0bjnJGf/pub?gid=1689140406&single=true&output=csv",
   
   // Caché
   CACHE_KEY: 'CSV_DATA_CACHE',
@@ -30,8 +30,8 @@ const CONFIG = {
   ],
   
   // Configuración de la aplicación
-  APP_TITLE: 'Panel ExpoAgro',
-  APP_DESCRIPTION: 'Panel de control para ExpoAgro 2025',
+  APP_TITLE: 'Panel AgroActiva 2025 - 4-7 Junio - PostVenta D&E',
+  APP_DESCRIPTION: 'Panel de control para AgroActiva 2025 (4-7 Junio)',
   
   // Configuración de visualización
   CHART_COLORS: [
