@@ -107,14 +107,12 @@ function convertDateFormat(dateStr) {
 
 // Función principal que maneja la solicitud GET
 function doGet(e) {
+  // Declarar isJsonRequest al inicio para que esté disponible en todo el scope
+  const parameters = e && e.parameter ? e.parameter : {};
+  const isJsonRequest = parameters.format === 'json';
   try {
-    // Verificar si se solicita formato JSON para AJAX
-    const parameters = e && e.parameter ? e.parameter : {};
-    const isJsonRequest = parameters.format === 'json';
-    
     // Limpiar la caché primero
 //    clearCache();
-    
     const data = getCsvData();
     
     // Logging detallado de los datos iniciales
@@ -272,24 +270,38 @@ function doGet(e) {
       
   } catch (error) {
     Logger.log("Error en doGet: " + error.message);
-    const errorTemplate = HtmlService.createTemplateFromFile("error");
-    errorTemplate.errorMessage = error.message;
-    return errorTemplate.evaluate();
+    if (isJsonRequest) {
+      // DEVOLVER JSON DE ERROR para AJAX
+      return ContentService
+        .createTextOutput(JSON.stringify({error: error.message}))
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeaders({
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Cache-Control': 'no-cache'
+        });
+    } else {
+      // DEVOLVER HTML para acceso normal
+      const errorTemplate = HtmlService.createTemplateFromFile("error");
+      errorTemplate.errorMessage = error.message;
+      return errorTemplate.evaluate();
+    }
   }
 }
 
 // Función para procesar todos los KPIs
 function processKPIs(data) {
-  // Configuración de verticales actualizada
+  // Configuración de verticales actualizada según la estructura real del CSV
   const verticales = [
-    { nombre: "WeedSeeker", columna: 15 },
-    { nombre: "Drones DJI", columna: 16 },
-    { nombre: "Siembra", columna: 17 },
-    { nombre: "Pulverización", columna: 18 },
-    { nombre: "Técnica", columna: 19 },
-    { nombre: "Guía y Autoguía", columna: 20 },
-    { nombre: "Taps - Señales", columna: 21 },
-    { nombre: "TAPs - Acción Café", columna: 22 }
+    { nombre: "WeedSeeker", columna: 15 },        // Columna O (15)
+    { nombre: "Drones DJI", columna: 16 },        // Columna P (16)
+    { nombre: "Siembra", columna: 17 },           // Columna Q (17)
+    { nombre: "Pulverización", columna: 18 },     // Columna R (18)
+    { nombre: "Técnica", columna: 19 },           // Columna S (19)
+    { nombre: "Guía y Autoguía", columna: 20 },   // Columna T (20)
+    { nombre: "Taps - Señales", columna: 21 },    // Columna U (21)
+    { nombre: "TAPs - Acción Café", columna: 22 } // Columna V (22)
   ];
   
   // 1. Afluencia de Visitantes por Fecha
@@ -305,16 +317,20 @@ function processKPIs(data) {
     Logger.log(`\nRegistro ${index + 1}:`);
     Logger.log(`AuxFecha: "${item.AuxFecha}"`);
   });
-    // Contar registros por fecha
+  // Contar registros por fecha
   Logger.log("\nProcesando fechas...");
   data.forEach((item, index) => {
     try {
-      const fechaTexto = item.AuxFecha;
-      if (!fechaTexto) {
-        Logger.log(`Registro ${index + 1}: Sin fecha`);
+      // CORRECCIÓN: Usar 'Marca temporal' en lugar de 'AuxFecha'
+      const marcaTemporal = item["Marca temporal"];
+      if (!marcaTemporal) {
+        Logger.log(`Registro ${index + 1}: Sin marca temporal`);
         return;
       }
 
+      // Extraer solo la fecha de la marca temporal (formato: "4/06/2025 9:31:09")
+      const fechaTexto = marcaTemporal.split(' ')[0]; // "4/06/2025"
+      
       // CORRECCIÓN: Mejorar el parsing de fechas
       const [dia, mes, año] = fechaTexto.split('/');
       
@@ -326,7 +342,8 @@ function processKPIs(data) {
       const fechaFormateada = `${año}-${mesFormateado}-${diaFormateado}`;
       
       Logger.log(`Registro ${index + 1}:`);
-      Logger.log(`  Fecha texto: ${fechaTexto}`);
+      Logger.log(`  Marca temporal: ${marcaTemporal}`);
+      Logger.log(`  Fecha extraída: ${fechaTexto}`);
       Logger.log(`  Componentes: día=${dia}, mes=${mes}, año=${año}`);
       Logger.log(`  Fecha formateada: ${fechaFormateada}`);
       
@@ -428,14 +445,14 @@ function processKPIs(data) {
   });
   // 3.1 Interés por Verticales por Fecha - VERSIÓN CORREGIDA
   Logger.log("\n=== PROCESAMIENTO VERTICALES POR FECHA (CORREGIDO) ===");
-  const verticalesPorFecha = {};
-  // Inicializar estructura de fechas
+  const verticalesPorFecha = {};  // Inicializar estructura de fechas
   const fechasUnicas = new Set();
   data.forEach(item => {
     try {
-      const fechaTexto = item.AuxFecha;
-      if (fechaTexto) {
-        // CORRECCIÓN: Mejorar el parsing de fechas
+      // CORRECCIÓN: Usar 'Marca temporal' en lugar de 'AuxFecha'
+      const marcaTemporal = item["Marca temporal"];
+      if (marcaTemporal) {
+        const fechaTexto = marcaTemporal.split(' ')[0]; // Extraer solo la fecha
         const [dia, mes, año] = fechaTexto.split('/');
         const diaFormateado = dia.padStart(2, '0');
         const mesFormateado = mes.padStart(2, '0');
@@ -458,18 +475,18 @@ function processKPIs(data) {
   });
 
   Logger.log("Estructura inicializada para verticalesPorFecha:");
-  Logger.log(JSON.stringify(verticalesPorFecha, null, 2));
-  // Procesar cada registro
+  Logger.log(JSON.stringify(verticalesPorFecha, null, 2));  // Procesar cada registro
   let registrosProcesados = 0;
   data.forEach((item, itemIndex) => {
     try {
-      const fechaTexto = item.AuxFecha;
-      if (!fechaTexto) {
-        Logger.log("Registro " + (itemIndex + 1) + ": Sin AuxFecha");
+      // CORRECCIÓN: Usar 'Marca temporal' en lugar de 'AuxFecha'
+      const marcaTemporal = item["Marca temporal"];
+      if (!marcaTemporal) {
+        Logger.log("Registro " + (itemIndex + 1) + ": Sin Marca temporal");
         return;
       }
 
-      // CORRECCIÓN: Mejorar el parsing de fechas
+      const fechaTexto = marcaTemporal.split(' ')[0]; // Extraer solo la fecha
       const [dia, mes, año] = fechaTexto.split('/');
       const diaFormateado = dia.padStart(2, '0');
       const mesFormateado = mes.padStart(2, '0');
@@ -676,5 +693,90 @@ function createCacheUpdateTrigger() {
   } catch (error) {
     Logger.log(`Error al crear trigger: ${error.message}`);
     throw error;
+  }
+}
+
+// Función para diagnosticar la estructura de datos del CSV
+function diagnosticarEstructuraCSV() {
+  try {
+    Logger.log("=== DIAGNÓSTICO DE ESTRUCTURA CSV ===");
+    
+    const response = UrlFetchApp.fetch(CSV_URL);
+    const csvData = response.getContentText();
+    const rows = Utilities.parseCsv(csvData);
+    
+    Logger.log("Total de filas: " + rows.length);
+    
+    if (rows.length === 0) {
+      Logger.log("❌ CSV está vacío");
+      return;
+    }
+    
+    // Analizar headers
+    const headers = rows[0];
+    Logger.log("Total de columnas: " + headers.length);
+    Logger.log("\nEstructura de columnas:");
+    headers.forEach((header, index) => {
+      Logger.log(`${index + 1}. "${header}"`);
+    });
+    
+    // Verificar columnas críticas
+    const columnasRequeridas = [
+      "Marca temporal",
+      "Localidad", 
+      "Provincia",
+      "Registrador",
+      "Asignado a:",
+      "WeedSeeker",
+      "Drones DJI",
+      "Siembra",
+      "Pulverización",
+      "Técnica",
+      "Guía y Autoguía",
+      "Taps - Señales",
+      "TAPs - Acción Café"
+    ];
+    
+    Logger.log("\nVerificación de columnas requeridas:");
+    columnasRequeridas.forEach(columna => {
+      const index = headers.indexOf(columna);
+      if (index >= 0) {
+        Logger.log(`✅ "${columna}" encontrada en posición ${index + 1}`);
+      } else {
+        Logger.log(`❌ "${columna}" NO encontrada`);
+      }
+    });
+    
+    // Analizar algunos registros de datos
+    if (rows.length > 1) {
+      Logger.log("\nAnálisis de datos (primeros 3 registros):");
+      for (let i = 1; i <= Math.min(3, rows.length - 1); i++) {
+        Logger.log(`\nRegistro ${i}:`);
+        const row = rows[i];
+        headers.forEach((header, index) => {
+          if (columnasRequeridas.includes(header)) {
+            Logger.log(`  ${header}: "${row[index] || ''}"`);
+          }
+        });
+      }
+    }
+    
+    // Verificar fechas
+    Logger.log("\nAnálisis de fechas:");
+    const fechasEncontradas = new Set();
+    for (let i = 1; i < Math.min(50, rows.length); i++) {
+      const marcaTemporal = rows[i][0]; // Primera columna
+      if (marcaTemporal) {
+        const fecha = marcaTemporal.split(' ')[0];
+        fechasEncontradas.add(fecha);
+      }
+    }
+    
+    Logger.log("Fechas encontradas: " + Array.from(fechasEncontradas).join(', '));
+    
+    Logger.log("\n=== DIAGNÓSTICO COMPLETADO ===");
+    
+  } catch (error) {
+    Logger.log("❌ Error en diagnóstico: " + error.message);
   }
 }
