@@ -171,8 +171,7 @@ function doGet(e) {
     // Si se solicita formato JSON, devolver solo los datos
     if (isJsonRequest) {
       Logger.log("📡 Devolviendo respuesta JSON para AJAX");
-      
-      const jsonResponse = {
+        const jsonResponse = {
         totalRegistros: kpis.totalRegistros,
         registrosPorFecha: kpis.registrosPorFecha,
         visitantesPorHora: kpis.visitantesPorHora,
@@ -180,6 +179,7 @@ function doGet(e) {
         verticalesPorFecha: kpis.verticalesPorFecha,
         registrosPorRegistrador: kpis.registrosPorRegistrador,
         registrosPorAsignado: kpis.registrosPorAsignado,
+        registrosPorEmpresa: kpis.registrosPorEmpresa,
         localidades: kpis.localidades,
         provincias: kpis.provincias,
         lastUpdate: new Date().toISOString()
@@ -221,9 +221,9 @@ function doGet(e) {
     template.registrosPorFecha = JSON.stringify(kpis.registrosPorFecha || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.visitantesPorHora = JSON.stringify(kpis.visitantesPorHora || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.totalesVerticales = JSON.stringify(kpis.totalesVerticales || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
-    template.verticalesPorFecha = JSON.stringify(kpis.verticalesPorFecha || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
-    template.registrosPorRegistrador = JSON.stringify(kpis.registrosPorRegistrador || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
+    template.verticalesPorFecha = JSON.stringify(kpis.verticalesPorFecha || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');    template.registrosPorRegistrador = JSON.stringify(kpis.registrosPorRegistrador || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.registrosPorAsignado = JSON.stringify(kpis.registrosPorAsignado || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
+    template.registrosPorEmpresa = JSON.stringify(kpis.registrosPorEmpresa || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.localidades = JSON.stringify(kpis.localidades || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.provincias = JSON.stringify(kpis.provincias || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     
@@ -552,7 +552,6 @@ function processKPIs(data) {
     acc[registrador] = (acc[registrador] || 0) + 1;
     return acc;
   }, {});
-
   // 4.1 Registros por Asignado a
   const registrosPorAsignado = data.reduce((acc, item) => {
     const asignado = item["Asignado a:"] || "Sin asignar";
@@ -566,6 +565,21 @@ function processKPIs(data) {
     .sort(([,a], [,b]) => b - a) // Ordenar por cantidad de registros
     .forEach(([asignado, count]) => {
       Logger.log(`"${asignado}": ${count}`);
+    });
+
+  // 4.2 Registros por Empresa
+  const registrosPorEmpresa = data.reduce((acc, item) => {
+    const empresa = item.EMPRESAREGISTRADOR || item["EMPRESA REGISTRADOR"] || item["Empresa Registrador"] || item.Empresa || "Sin empresa";
+    acc[empresa] = (acc[empresa] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Logging para diagnóstico de registros por empresa
+  Logger.log("\nRegistros por Empresa (procesados):");
+  Object.entries(registrosPorEmpresa)
+    .sort(([,a], [,b]) => b - a) // Ordenar por cantidad de registros
+    .forEach(([empresa, count]) => {
+      Logger.log(`"${empresa}": ${count}`);
     });
   // 5. Distribución Geográfica
   Logger.log("\n=== PROCESAMIENTO GEOGRÁFICO ===");
@@ -658,6 +672,7 @@ function processKPIs(data) {
   Logger.log("Total registros: " + data.length);
   Logger.log("Registros por fecha: " + JSON.stringify(registrosPorFecha));
   Logger.log("Registros por asignado: " + JSON.stringify(registrosPorAsignado));
+  Logger.log("Registros por empresa: " + JSON.stringify(registrosPorEmpresa));
   Logger.log("Totales verticales: " + JSON.stringify(totalesVerticales));
   Logger.log("Verticales por fecha: " + JSON.stringify(verticalesPorFecha));
   Logger.log("Localidades ordenadas: " + JSON.stringify(localidadesOrdenadas));
@@ -671,6 +686,7 @@ function processKPIs(data) {
     verticalesPorFecha: verticalesPorFecha,
     registrosPorRegistrador: registrosPorRegistrador,
     registrosPorAsignado: registrosPorAsignado,
+    registrosPorEmpresa: registrosPorEmpresa,
     localidades: localidadesOrdenadas,
     provincias: provinciasOrdenadas
   };
