@@ -957,6 +957,21 @@
           </div>
           <div class="chart-wrapper">
             <canvas id="empresasChart"></canvas>
+          </div>        </div>
+        <div class="chart-container">
+          <div class="chart-title">
+            Registros por Empresa y Vertical
+            <div class="chart-controls">
+              <label class="checkbox-container">
+                <input type="checkbox" id="excludeDyESAVertical" onchange="toggleDyESAVerticalFilter()">
+                <span class="checkmark"></span>
+                Excluir DyE S.A.
+              </label>
+              <span id="empresasVerticalCount" class="count-indicator"></span>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="empresasVerticalChart"></canvas>
           </div>
         </div>
         <div class="chart-container">
@@ -1006,14 +1021,14 @@
       let visitantesPorHora = {};
       let totalesVerticales = {};
       let verticalesPorFecha = {};
-      let registrosPorRegistrador = {};
-      let registrosPorAsignado = {};
+      let registrosPorRegistrador = {};      let registrosPorAsignado = {};
       let registrosPorEmpresa = {};
+      let registrosPorEmpresaVertical = {};
       let localidades = {};
       let provincias = {};
-      
-      // Variables de control para filtros
+        // Variables de control para filtros
       let excludeDyESA = false;
+      let excludeDyESAVertical = false;
       
       // Coordenadas de las provincias argentinas
       const coordenadasProvincias = {
@@ -1198,7 +1213,20 @@
         if (charts.empresas && registrosPorEmpresa) {
           updateEmpresasChart();
         }
-      }      // Función auxiliar para filtrar datos de empresas
+      }
+
+      // Función para manejar el filtro de DyE S.A. en el gráfico de verticales
+      function toggleDyESAVerticalFilter() {
+        const checkbox = document.getElementById('excludeDyESAVertical');
+        excludeDyESAVertical = checkbox.checked;
+        
+        console.log('📊 Filtro DyE S.A. (Verticales):', excludeDyESAVertical ? 'Activado' : 'Desactivado');
+        
+        // Actualizar el gráfico de empresas y verticales
+        if (charts.empresasVertical && registrosPorEmpresaVertical) {
+          updateEmpresasVerticalChart();
+        }
+      }// Función auxiliar para filtrar datos de empresas
       function getFilteredEmpresasData() {
         let empresasFiltradas = { ...registrosPorEmpresa };
         let dyeRegistros = 0;
@@ -1233,8 +1261,73 @@
             countElement.textContent = `${Object.keys(resultado).length} de ${totalEmpresas} empresas`;
           }
         }
+          return resultado;
+      }      // Función auxiliar para filtrar y preparar datos de empresas y verticales
+      function getFilteredEmpresasVerticalData() {
+        let empresasFiltradas = { ...registrosPorEmpresaVertical };
+        let dyeRegistrosTotales = 0;
         
-        return resultado;
+        // Si el filtro está activado, excluir variaciones de "DyE S.A."
+        if (excludeDyESAVertical) {
+          const dyeVariations = ['DyE S.A.', 'DyE S.A', 'DYE S.A.', 'DYE S.A', 'Dye S.A.', 'Dye S.A', 'DyE SA', 'DYE SA'];
+          dyeVariations.forEach(variation => {
+            if (empresasFiltradas[variation]) {
+              // Sumar los registros de DyE que se van a excluir
+              Object.values(empresasFiltradas[variation]).forEach(count => {
+                dyeRegistrosTotales += count;
+              });
+              delete empresasFiltradas[variation];
+            }
+          });
+        }
+        
+        // Obtener todas las verticales únicas
+        const todasVerticales = new Set();
+        Object.values(empresasFiltradas).forEach(verticales => {
+          Object.keys(verticales).forEach(vertical => todasVerticales.add(vertical));
+        });
+        
+        // Calcular totales por empresa para ordenamiento
+        const totalesPorEmpresa = Object.entries(empresasFiltradas).map(([empresa, verticales]) => {
+          const total = Object.values(verticales).reduce((sum, count) => sum + count, 0);
+          return [empresa, total, verticales];
+        }).sort(([,a], [,b]) => b - a).slice(0, 15); // Top 15 empresas
+        
+        // Preparar datos para Chart.js
+        const empresas = totalesPorEmpresa.map(([empresa]) => empresa);
+        const verticalesArray = Array.from(todasVerticales).sort();
+        
+        // Colores para las verticales
+        const colores = [
+          '#006600', '#339933', '#66BB6A', '#4CAF50', '#8BC34A',
+          '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#FF5722',
+          '#F44336', '#E91E63', '#9C27B0', '#673AB7', '#3F51B5',
+          '#2196F3', '#03A9F4', '#00BCD4', '#009688', '#795548'
+        ];
+        
+        const datasets = verticalesArray.map((vertical, index) => ({
+          label: vertical,
+          data: empresas.map(empresa => {
+            const verticalesEmpresa = empresasFiltradas[empresa] || {};
+            return verticalesEmpresa[vertical] || 0;
+          }),
+          backgroundColor: colores[index % colores.length],
+          borderColor: colores[index % colores.length],
+          borderWidth: 1
+        }));
+        
+        // Actualizar el contador
+        const totalEmpresas = Object.keys(empresasFiltradas).length;
+        const countElement = document.getElementById('empresasVerticalCount');
+        if (countElement) {
+          if (excludeDyESAVertical && dyeRegistrosTotales > 0) {
+            countElement.textContent = `${empresas.length} de ${totalEmpresas} empresas (${dyeRegistrosTotales} registros de DyE S.A. excluidos)`;
+          } else {
+            countElement.textContent = `${empresas.length} de ${totalEmpresas} empresas`;
+          }
+        }
+        
+        return { empresas, datasets };
       }
 
       // Función para inicializar el mapa de calor
@@ -1509,9 +1602,9 @@
           visitantesPorHora = safeJSONParse('<?!= visitantesPorHora ?>', 'visitantesPorHora');
           totalesVerticales = safeJSONParse('<?!= totalesVerticales ?>', 'totalesVerticales');
           verticalesPorFecha = safeJSONParse('<?!= verticalesPorFecha ?>', 'verticalesPorFecha');
-          registrosPorRegistrador = safeJSONParse('<?!= registrosPorRegistrador ?>', 'registrosPorRegistrador');
-          registrosPorAsignado = safeJSONParse('<?!= registrosPorAsignado ?>', 'registrosPorAsignado');
+          registrosPorRegistrador = safeJSONParse('<?!= registrosPorRegistrador ?>', 'registrosPorRegistrador');          registrosPorAsignado = safeJSONParse('<?!= registrosPorAsignado ?>', 'registrosPorAsignado');
           registrosPorEmpresa = safeJSONParse('<?!= registrosPorEmpresa ?>', 'registrosPorEmpresa');
+          registrosPorEmpresaVertical = safeJSONParse('<?!= registrosPorEmpresaVertical ?>', 'registrosPorEmpresaVertical');
           localidades = safeJSONParse('<?!= localidades ?>', 'localidades');
           provincias = safeJSONParse('<?!= provincias ?>', 'provincias');
 
@@ -1535,13 +1628,18 @@
             valor: verticalesPorFecha,
             keys: verticalesPorFecha ? Object.keys(verticalesPorFecha) : [],
             longitud: verticalesPorFecha ? Object.keys(verticalesPorFecha).length : 0
-          });
-
-          console.log('registrosPorEmpresa:', {
+          });          console.log('registrosPorEmpresa:', {
             tipo: typeof registrosPorEmpresa,
             valor: registrosPorEmpresa,
             keys: registrosPorEmpresa ? Object.keys(registrosPorEmpresa) : [],
             longitud: registrosPorEmpresa ? Object.keys(registrosPorEmpresa).length : 0
+          });
+
+          console.log('registrosPorEmpresaVertical:', {
+            tipo: typeof registrosPorEmpresaVertical,
+            valor: registrosPorEmpresaVertical,
+            keys: registrosPorEmpresaVertical ? Object.keys(registrosPorEmpresaVertical) : [],
+            longitud: registrosPorEmpresaVertical ? Object.keys(registrosPorEmpresaVertical).length : 0
           });
 
           // Verificar que los datos son válidos con logging detallado
@@ -2234,6 +2332,92 @@
                     maxRotation: 45
                   }
                 }
+              }            }
+          });
+
+          // Gráfico de registros por empresa y vertical (barras apiladas)
+          const ctx_empresasVertical = document.getElementById('empresasVerticalChart').getContext('2d');
+          const empresasVerticalData = getFilteredEmpresasVerticalData();
+
+          charts.empresasVertical = new Chart(ctx_empresasVertical, {
+            type: 'bar',
+            data: {
+              labels: empresasVerticalData.empresas,
+              datasets: empresasVerticalData.datasets
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'top',
+                  labels: {
+                    boxWidth: 12,
+                    padding: 8,
+                    font: {
+                      size: 11,
+                      weight: 600
+                    },
+                    color: '#1B1B1B'
+                  }
+                },
+                tooltip: {
+                  backgroundColor: 'rgba(0, 102, 0, 0.9)',
+                  titleColor: '#ffffff',
+                  bodyColor: '#ffffff',
+                  borderColor: '#006600',
+                  borderWidth: 1,
+                  cornerRadius: 8,
+                  mode: 'index',
+                  intersect: false
+                }
+              },
+              scales: {
+                x: {
+                  stacked: true,
+                  title: {
+                    display: true,
+                    text: 'Empresa Registradora',
+                    color: '#1B1B1B',
+                    font: {
+                      size: 12,
+                      weight: 600
+                    }
+                  },
+                  grid: {
+                    display: false
+                  },
+                  ticks: {
+                    color: '#606060',
+                    font: {
+                      size: 11
+                    },
+                    maxRotation: 45
+                  }
+                },
+                y: {
+                  stacked: true,
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: 'Número de Registros',
+                    color: '#1B1B1B',
+                    font: {
+                      size: 12,
+                      weight: 600
+                    }
+                  },
+                  grid: {
+                    color: '#E8E8E8',
+                    lineWidth: 1
+                  },
+                  ticks: {
+                    color: '#606060',
+                    font: {
+                      size: 11
+                    }
+                  }
+                }
               }
             }
           });
@@ -2594,9 +2778,9 @@
         if (data.visitantesPorHora) visitantesPorHora = data.visitantesPorHora;
         if (data.totalesVerticales) totalesVerticales = data.totalesVerticales;
         if (data.verticalesPorFecha) verticalesPorFecha = data.verticalesPorFecha;
-        if (data.registrosPorRegistrador) registrosPorRegistrador = data.registrosPorRegistrador;
-        if (data.registrosPorAsignado) registrosPorAsignado = data.registrosPorAsignado;
+        if (data.registrosPorRegistrador) registrosPorRegistrador = data.registrosPorRegistrador;        if (data.registrosPorAsignado) registrosPorAsignado = data.registrosPorAsignado;
         if (data.registrosPorEmpresa) registrosPorEmpresa = data.registrosPorEmpresa;
+        if (data.registrosPorEmpresaVertical) registrosPorEmpresaVertical = data.registrosPorEmpresaVertical;
         if (data.localidades) localidades = data.localidades;
         if (data.provincias) provincias = data.provincias;
         
@@ -2655,11 +2839,14 @@
           }          // Actualizar gráfico de asignados
           if (charts.asignados && registrosPorAsignado) {
             updateAsignadosChart();
-          }
-
-          // Actualizar gráfico de empresas
+          }          // Actualizar gráfico de empresas
           if (charts.empresas && registrosPorEmpresa) {
             updateEmpresasChart();
+          }
+
+          // Actualizar gráfico de empresas y verticales
+          if (charts.empresasVertical && registrosPorEmpresaVertical) {
+            updateEmpresasVerticalChart();
           }
 
           // Actualizar gráficos geográficos
@@ -2750,6 +2937,16 @@
           charts.empresas.update('none');
         } catch (error) {
           console.error('Error actualizando gráfico de empresas:', error);
+        }
+      }      function updateEmpresasVerticalChart() {
+        try {
+          const empresasVerticalData = getFilteredEmpresasVerticalData();
+
+          charts.empresasVertical.data.labels = empresasVerticalData.empresas;
+          charts.empresasVertical.data.datasets = empresasVerticalData.datasets;
+          charts.empresasVertical.update('none');
+        } catch (error) {
+          console.error('❌ Error actualizando gráfico de empresas y verticales:', error);
         }
       }
 

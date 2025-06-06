@@ -177,9 +177,9 @@ function doGet(e) {
         visitantesPorHora: kpis.visitantesPorHora,
         totalesVerticales: kpis.totalesVerticales,
         verticalesPorFecha: kpis.verticalesPorFecha,
-        registrosPorRegistrador: kpis.registrosPorRegistrador,
-        registrosPorAsignado: kpis.registrosPorAsignado,
+        registrosPorRegistrador: kpis.registrosPorRegistrador,        registrosPorAsignado: kpis.registrosPorAsignado,
         registrosPorEmpresa: kpis.registrosPorEmpresa,
+        registrosPorEmpresaVertical: kpis.registrosPorEmpresaVertical,
         localidades: kpis.localidades,
         provincias: kpis.provincias,
         lastUpdate: new Date().toISOString()
@@ -221,9 +221,9 @@ function doGet(e) {
     template.registrosPorFecha = JSON.stringify(kpis.registrosPorFecha || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.visitantesPorHora = JSON.stringify(kpis.visitantesPorHora || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.totalesVerticales = JSON.stringify(kpis.totalesVerticales || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
-    template.verticalesPorFecha = JSON.stringify(kpis.verticalesPorFecha || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');    template.registrosPorRegistrador = JSON.stringify(kpis.registrosPorRegistrador || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
-    template.registrosPorAsignado = JSON.stringify(kpis.registrosPorAsignado || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
+    template.verticalesPorFecha = JSON.stringify(kpis.verticalesPorFecha || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');    template.registrosPorRegistrador = JSON.stringify(kpis.registrosPorRegistrador || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');    template.registrosPorAsignado = JSON.stringify(kpis.registrosPorAsignado || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.registrosPorEmpresa = JSON.stringify(kpis.registrosPorEmpresa || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
+    template.registrosPorEmpresaVertical = JSON.stringify(kpis.registrosPorEmpresaVertical || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.localidades = JSON.stringify(kpis.localidades || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     template.provincias = JSON.stringify(kpis.provincias || {}).replace(/'/g, "\\'").replace(/"/g, '\\"');
     
@@ -378,8 +378,7 @@ function processKPIs(data) {
       // CORRECCIÓN: Usar función mejorada de conversión de fecha
       const fechaConvertida = convertDateFormat(fecha);
       const horaNum = parseInt(hora.split(":")[0]);
-      
-      if (!acc[fechaConvertida]) {
+        if (!acc[fechaConvertida]) {
         acc[fechaConvertida] = new Array(24).fill(0);
       }
       
@@ -573,14 +572,41 @@ function processKPIs(data) {
     acc[empresa] = (acc[empresa] || 0) + 1;
     return acc;
   }, {});
-
   // Logging para diagnóstico de registros por empresa
   Logger.log("\nRegistros por Empresa (procesados):");
   Object.entries(registrosPorEmpresa)
     .sort(([,a], [,b]) => b - a) // Ordenar por cantidad de registros
     .forEach(([empresa, count]) => {
       Logger.log(`"${empresa}": ${count}`);
+    });  // 4.5. Registros por Empresa y Vertical
+  const registrosPorEmpresaVertical = data.reduce((acc, item) => {
+    const empresa = item.EMPRESAREGISTRADOR || item["EMPRESA REGISTRADOR"] || item["Empresa Registrador"] || item.Empresa || "Sin empresa";
+    
+    // Crear el objeto para la empresa si no existe
+    if (!acc[empresa]) {
+      acc[empresa] = {};
+    }
+    
+    // Procesar cada vertical para este registro
+    verticales.forEach(vertical => {
+      const columnaIndex = vertical.columna - 1;
+      const valores = Object.values(item);
+      
+      // Verificar si tiene esta vertical activa
+      let hasVertical = false;
+      if (columnaIndex < valores.length) {
+        const valor = valores[columnaIndex];
+        hasVertical = valor === "TRUE" || valor === true || valor === "1" || valor === 1;
+      }
+      
+      if (hasVertical) {
+        acc[empresa][vertical.nombre] = (acc[empresa][vertical.nombre] || 0) + 1;
+      }
     });
+    
+    return acc;
+  }, {});
+
   // 5. Distribución Geográfica
   Logger.log("\n=== PROCESAMIENTO GEOGRÁFICO ===");
   
@@ -684,9 +710,9 @@ function processKPIs(data) {
     visitantesPorHora: visitantesPorHora,
     totalesVerticales: totalesVerticales,
     verticalesPorFecha: verticalesPorFecha,
-    registrosPorRegistrador: registrosPorRegistrador,
-    registrosPorAsignado: registrosPorAsignado,
+    registrosPorRegistrador: registrosPorRegistrador,    registrosPorAsignado: registrosPorAsignado,
     registrosPorEmpresa: registrosPorEmpresa,
+    registrosPorEmpresaVertical: registrosPorEmpresaVertical,
     localidades: localidadesOrdenadas,
     provincias: provinciasOrdenadas
   };
@@ -794,5 +820,93 @@ function diagnosticarEstructuraCSV() {
     
   } catch (error) {
     Logger.log("❌ Error en diagnóstico: " + error.message);
+  }
+}
+
+// Función de prueba para verificar registrosPorEmpresaVertical
+function testRegistrosPorEmpresaVertical() {
+  try {
+    Logger.log("=== PRUEBA REGISTROS POR EMPRESA Y VERTICAL ===");
+    
+    const data = getCsvData();
+    Logger.log("Datos obtenidos: " + data.length + " registros");
+    
+    const kpis = processKPIs(data);
+    Logger.log("KPIs procesados exitosamente");
+    
+    Logger.log("\nRegistros por Empresa y Vertical:");
+    Logger.log(JSON.stringify(kpis.registrosPorEmpresaVertical, null, 2));
+    
+    const empresasConDatos = Object.keys(kpis.registrosPorEmpresaVertical || {});
+    Logger.log("\nEmpresas encontradas: " + empresasConDatos.length);
+    
+    empresasConDatos.forEach(empresa => {
+      const verticales = kpis.registrosPorEmpresaVertical[empresa];
+      const totalVertical = Object.values(verticales).reduce((sum, count) => sum + count, 0);
+      Logger.log(`${empresa}: ${totalVertical} registros totales`);
+      Object.entries(verticales).forEach(([vertical, count]) => {
+        if (count > 0) {
+          Logger.log(`  - ${vertical}: ${count}`);
+        }
+      });
+    });
+    
+    return "Prueba completada - revisa los logs";
+  } catch (error) {
+    Logger.log("Error en prueba: " + error.message);
+    return "Error: " + error.message;
+  }
+}
+
+// Función de prueba para verificar el cálculo de visitantesPorHora
+function testVisitantesPorHora() {
+  try {
+    Logger.log("=== PRUEBA VISITANTES POR HORA ===");
+    
+    // Datos de prueba con marcas temporales
+    const testData = [
+      {"Marca temporal": "04/06/2025 09:30:15", "Nombre": "Juan Pérez"},
+      {"Marca temporal": "04/06/2025 10:45:22", "Nombre": "María García"},
+      {"Marca temporal": "04/06/2025 14:20:33", "Nombre": "Carlos López"},
+      {"Marca temporal": "05/06/2025 09:15:44", "Nombre": "Ana Rodríguez"},
+      {"Marca temporal": "05/06/2025 11:30:55", "Nombre": "Luis Martín"}
+    ];
+    
+    // Procesar visitantes por hora usando la misma lógica del código principal
+    const visitantesPorHora = testData.reduce((acc, item) => {
+      try {
+        const [fecha, hora] = item["Marca temporal"].split(" ");
+        
+        // Usar función de conversión de fecha
+        const fechaConvertida = convertDateFormat(fecha);
+        const horaNum = parseInt(hora.split(":")[0]);
+        
+        if (!acc[fechaConvertida]) {
+          acc[fechaConvertida] = new Array(24).fill(0);
+        }
+        
+        acc[fechaConvertida][horaNum]++;
+        return acc;
+      } catch (error) {
+        Logger.log(`Error procesando hora: ${error.message}`);
+        return acc;
+      }
+    }, {});
+    
+    Logger.log("Resultado visitantes por hora:");
+    Logger.log(JSON.stringify(visitantesPorHora, null, 2));
+    
+    // Verificar resultados esperados
+    Logger.log("\nVerificación de resultados:");
+    Logger.log("2025-06-04 a las 09h:", visitantesPorHora['2025-06-04'] ? visitantesPorHora['2025-06-04'][9] : 0);
+    Logger.log("2025-06-04 a las 10h:", visitantesPorHora['2025-06-04'] ? visitantesPorHora['2025-06-04'][10] : 0);
+    Logger.log("2025-06-04 a las 14h:", visitantesPorHora['2025-06-04'] ? visitantesPorHora['2025-06-04'][14] : 0);
+    Logger.log("2025-06-05 a las 09h:", visitantesPorHora['2025-06-05'] ? visitantesPorHora['2025-06-05'][9] : 0);
+    Logger.log("2025-06-05 a las 11h:", visitantesPorHora['2025-06-05'] ? visitantesPorHora['2025-06-05'][11] : 0);
+    
+    return "Prueba de visitantes por hora completada - revisa los logs";
+  } catch (error) {
+    Logger.log("Error en prueba visitantes por hora: " + error.message);
+    return "Error: " + error.message;
   }
 }
